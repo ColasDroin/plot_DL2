@@ -111,9 +111,7 @@ def get_dict_fills_data(
             dict_fills[f"{fill_idx}"]["df"] = sample_df
             dict_fills[f"{fill_idx}"]["df"]["fill"] = fill_idx
             # ! Update link accordingly
-            dict_fills[f"{fill_idx}"]["df"]["link"] = "https://lhc-fills.web.cern.ch/fills/" + str(
-                fill_idx
-            )
+            dict_fills[f"{fill_idx}"]["df"]["link"] = "https://www.google.com/"
 
             # Add metadata
             dict_fills = add_fill_metadata(path_tag_files, tag_files, dict_fills, fill_idx)
@@ -138,7 +136,8 @@ def plot_fill_data(
     clickable_link=True,
     save_html: bool = True,
     html_filepath: str = "plot.html",
-):
+    verbose: bool = False,
+) -> figure:
     p = figure(title=f"DL2 Report from {start_time} to {end_time}")
 
     # set bokeh figure size
@@ -160,11 +159,17 @@ def plot_fill_data(
     p.y_range = Range1d(0, 7500)
 
     # Other variables
-    set_extra_axes = {}
+    set_extra_axes = set({})
     for var_str, subdic_var in dict_var.items():
         if subdic_var["ax"] not in set_extra_axes:
-            p.extra_y_ranges = {var_str: Range1d(start=subdic_var["start"], end=subdic_var["end"])}
-            p.add_layout(LinearAxis(y_range_name=var_str, axis_label=var_str.capitalize()), "right")
+            p.extra_y_ranges = {
+                subdic_var["ax"]: Range1d(start=subdic_var["start"], end=subdic_var["end"])
+            }
+            p.add_layout(
+                LinearAxis(y_range_name=subdic_var["ax"], axis_label=subdic_var["ax"].capitalize()),
+                "right",
+            )
+            set_extra_axes.add(subdic_var["ax"])
 
     # List of renderers for tooltips and links
     l_r_link = []
@@ -172,7 +177,8 @@ def plot_fill_data(
 
     # Loop over fills and plot
     for fill in dict_fills.keys():
-        print("Now plotting ", dict_fills[fill]["fill"])
+        if verbose:
+            print("Now plotting ", dict_fills[fill]["fill"])
 
         # Plot energy on first y-axis
         s = p.scatter(
@@ -204,7 +210,7 @@ def plot_fill_data(
                     source=dict_fills[fill]["df"],
                     line_width=2,
                     line_color=subdic_var["color"],
-                    y_range_name=var_str,
+                    y_range_name=subdic_var["ax"],
                 )
             )
 
@@ -221,7 +227,6 @@ def plot_fill_data(
             ("link", "@link"),
         ],
     )
-    p.add_tools(hover)
 
     # Add link if clickable_link is True
     if clickable_link:
@@ -235,6 +240,8 @@ def plot_fill_data(
 
         tapt = TapTool(renderers=l_r_link, callback=tap_cb, behavior="inspect")
         p.add_tools(tapt)
+
+    p.add_tools(hover)
 
     # convert t_start to unixtime in nanoseconds
     t_start = pd.Timestamp(start_time).timestamp() * 1e9
