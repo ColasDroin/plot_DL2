@@ -8,9 +8,6 @@ import numpy as np
 import pandas as pd
 import yaml
 
-# Configure dask
-dask.config.set({"dataframe.query-planning": True})
-
 # Relative imports from third party libraries
 from bokeh.io import output_file, save
 from bokeh.models import (
@@ -24,6 +21,9 @@ from bokeh.models import (
 )
 from bokeh.plotting import figure
 from dask import dataframe as dd
+
+# Configure dask
+dask.config.set({"dataframe.query-planning": True})
 
 
 def load_fills_filtered(
@@ -41,11 +41,7 @@ def load_fills_filtered(
     t_start = pd.Timestamp(start_time).timestamp() * 1e9
     t_stop = pd.Timestamp(end_time).timestamp() * 1e9
 
-    fills_filtered = df_fills[
-        (df_fills["tsStart"] > t_start) & (df_fills["tsEnd"] < t_stop)
-    ].index.unique()
-
-    return fills_filtered
+    return df_fills[(df_fills["tsStart"] > t_start) & (df_fills["tsEnd"] < t_stop)].index.unique()
 
 
 def add_fill_metadata(
@@ -62,22 +58,31 @@ def add_fill_metadata(
         with open(f"{relative_path_metadata}{l_tag_filename[0]}") as f:
             yaml_file = yaml.load(f, Loader=yaml.FullLoader)
 
-            dict_fills[f"{fill_idx}"]["df"]["start"] = yaml_file["start"]
-            dict_fills[f"{fill_idx}"]["df"]["end"] = yaml_file["end"]
-            dict_fills[f"{fill_idx}"]["df"]["duration"] = yaml_file["duration"]
+        dict_fills[f"{fill_idx}"]["df"]["fill"] = fill_idx
+        dict_fills[f"{fill_idx}"]["df"]["start"] = yaml_file["start"]
+        dict_fills[f"{fill_idx}"]["df"]["end"] = yaml_file["end"]
+        dict_fills[f"{fill_idx}"]["df"]["duration"] = yaml_file["duration"]
 
-            if yaml_file["tags"] is None:
-                dict_fills[f"{fill_idx}"]["df"]["tags"] = ""
-            else:
-                dict_fills[f"{fill_idx}"]["df"]["tags"] = ", ".join(
-                    [str(tags) for tags in yaml_file["tags"]]
-                )
-            if yaml_file["comment"] is None:
-                dict_fills[f"{fill_idx}"]["df"]["comment"] = ""
-            else:
-                dict_fills[f"{fill_idx}"]["df"]["comment"] = ", ".join(
-                    [str(comment) for comment in yaml_file["comment"]]
-                )
+        # Compute link to elogbook
+        start_tag = yaml_file["start"].split(".")[0].replace(" ", "T")
+        end_tag = yaml_file["end"].split(".")[0].replace(" ", "T")
+        link = f"https://be-op-logbook.web.cern.ch/elogbook-server/#/logbook?logbookId=322&dateFrom={start_tag}&dateTo={end_tag}"
+        dict_fills[f"{fill_idx}"]["df"]["link"] = link
+        dict_fills[f"{fill_idx}"]["df"]["alt_link"] = "www.google.com"
+
+        # Add tags and comments
+        if yaml_file["tags"] is None:
+            dict_fills[f"{fill_idx}"]["df"]["tags"] = ""
+        else:
+            dict_fills[f"{fill_idx}"]["df"]["tags"] = ", ".join(
+                [str(tags) for tags in yaml_file["tags"]]
+            )
+        if yaml_file["comment"] is None:
+            dict_fills[f"{fill_idx}"]["df"]["comment"] = ""
+        else:
+            dict_fills[f"{fill_idx}"]["df"]["comment"] = ", ".join(
+                [str(comment) for comment in yaml_file["comment"]]
+            )
 
     return dict_fills
 
@@ -102,16 +107,13 @@ def get_dict_fills_data(
             )
 
             # Sample the dataframe
-            sample_df = ddf.compute().sort_index().ffill().dropna().sample(frac=0.001).sort_index()
+            sample_df = ddf.compute().sort_index().ffill().dropna().sample(frac=0.0001).sort_index()
 
             # convert sample_df index in human readable format
             sample_df.index = pd.to_datetime(sample_df.index, unit="ns")
-            dict_fills[f"{fill_idx}"] = {}
-            dict_fills[f"{fill_idx}"]["fill"] = fill_idx
-            dict_fills[f"{fill_idx}"]["df"] = sample_df
-            dict_fills[f"{fill_idx}"]["df"]["fill"] = fill_idx
-            # ! Update link accordingly
-            dict_fills[f"{fill_idx}"]["df"]["link"] = "https://www.google.com/"
+
+            # Add to dict fills
+            dict_fills[f"{fill_idx}"] = {"fill": fill_idx, "df": sample_df}
 
             # Add metadata
             dict_fills = add_fill_metadata(path_tag_files, tag_files, dict_fills, fill_idx)
@@ -160,7 +162,7 @@ def plot_fill_data(
 
     # Other variables
     set_extra_axes = set({})
-    for var_str, subdic_var in dict_var.items():
+    for subdic_var in dict_var.values():
         if subdic_var["ax"] not in set_extra_axes:
             p.extra_y_ranges = {
                 subdic_var["ax"]: Range1d(start=subdic_var["start"], end=subdic_var["end"])
@@ -176,7 +178,7 @@ def plot_fill_data(
     l_r_others = []
 
     # Loop over fills and plot
-    for fill in dict_fills.keys():
+    for fill in dict_fills:
         if verbose:
             print("Now plotting ", dict_fills[fill]["fill"])
 
@@ -202,7 +204,7 @@ def plot_fill_data(
         )
 
         # plot other variables on second y-axis
-        for var_str, subdic_var in dict_var.items():
+        for subdic_var in dict_var.values():
             l_r_others.append(
                 p.line(
                     x="index",
@@ -224,7 +226,8 @@ def plot_fill_data(
             ("duration", "@duration"),
             ("tags", "@tags"),
             ("comment", "@comment"),
-            ("link", "@link"),
+            # ! Displaying links is a bad idea as they're too long
+            # ("link", "@link"),
         ],
     )
 
@@ -233,8 +236,14 @@ def plot_fill_data(
         # Add clickable link
         tap_cb = CustomJS(
             code="""
-                var l = cb_data.source.data['link'][cb_data.source.inspected.indices[0]]
-                window.open(l)
+                var l1 = cb_data.source.data['link'][cb_data.source.inspected.indices[0]]
+                var l2 = cb_data.source.data['alt_link'][cb_data.source.inspected.indices[0]]
+                var alt_pressed = cb_data.event.modifiers.alt
+                if (alt_pressed) {
+                    window.open(l2)
+                } else {
+                    window.open(l1)
+                }
                 """
         )
 
