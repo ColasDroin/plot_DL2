@@ -68,7 +68,7 @@ def add_fill_metadata(
         end_tag = yaml_file["end"].split(".")[0].replace(" ", "T")
         link = f"https://be-op-logbook.web.cern.ch/elogbook-server/#/logbook?logbookId=322&dateFrom={start_tag}&dateTo={end_tag}"
         dict_fills[f"{fill_idx}"]["df"]["link"] = link
-        dict_fills[f"{fill_idx}"]["df"]["alt_link"] = "www.google.com"
+        dict_fills[f"{fill_idx}"]["df"]["alt_link"] = "https://bpt.web.cern.ch/lhc/supertable/2024/"
 
         # Add tags and comments
         if yaml_file["tags"] is None:
