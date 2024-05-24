@@ -11,6 +11,7 @@ import yaml
 # Relative imports from third party libraries
 from bokeh.io import output_file, save
 from bokeh.models import (
+    BoxAnnotation,
     CustomJS,
     DatetimeTickFormatter,
     FixedTicker,
@@ -18,7 +19,6 @@ from bokeh.models import (
     LinearAxis,
     Range1d,
     TapTool,
-    CustomJSHover,
 )
 from bokeh.plotting import figure
 from dask import dataframe as dd
@@ -201,18 +201,27 @@ def plot_fill_data(
         l_r_link.append(ss)
         l_r_others.append(s)
 
-        # plot other variables on second y-axis
+        # Plot other variables on second y-axis
         for subdic_var in dict_var.values():
             l_r_others.append(
                 p.line(
                     x="index",
                     y=subdic_var["full_name"],
                     source=dict_fills[fill]["df"],
-                    line_width=2,
+                    line_width=1,
                     line_color=subdic_var["color"],
                     y_range_name=subdic_var["ax"],
                 )
             )
+
+        # Plot conditional background
+        low_box = BoxAnnotation(
+            left=dict_fills[fill]["df"].index.min(),
+            right=dict_fills[fill]["df"].index.max(),
+            fill_color=color_energy_even if dict_fills[fill]["fill"] % 2 else color_energy_odd,
+            fill_alpha=0.2,
+        )
+        p.add_layout(low_box)
 
     # Add hover tool
     hover = HoverTool(
