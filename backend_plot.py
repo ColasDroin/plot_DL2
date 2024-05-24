@@ -18,6 +18,7 @@ from bokeh.models import (
     LinearAxis,
     Range1d,
     TapTool,
+    CustomJSHover,
 )
 from bokeh.plotting import figure
 from dask import dataframe as dd
@@ -183,25 +184,22 @@ def plot_fill_data(
             print("Now plotting ", dict_fills[fill]["fill"])
 
         # Plot energy on first y-axis
-        s = p.scatter(
+        s = p.line(
+            x="index",
+            y="LHC.BCCM.B1.A:BEAM_ENERGY",
+            source=dict_fills[fill]["df"],
+            line_color=color_energy_even if dict_fills[fill]["fill"] % 2 else color_energy_odd,
+            alpha=1.0,
+        )
+        ss = p.scatter(
             x="index",
             y="LHC.BCCM.B1.A:BEAM_ENERGY",
             source=dict_fills[fill]["df"],
             line_color=color_energy_even if dict_fills[fill]["fill"] % 2 else color_energy_odd,
             alpha=0.0,
         )
-        l_r_link.append(s)
+        l_r_link.append(ss)
         l_r_others.append(s)
-
-        # Link points together (no renderer)
-        p.segment(
-            x0=dict_fills[fill]["df"].index.values[:-1],
-            y0=dict_fills[fill]["df"]["LHC.BCCM.B1.A:BEAM_ENERGY"].values[:-1],
-            x1=dict_fills[fill]["df"].index.values[1:],
-            y1=dict_fills[fill]["df"]["LHC.BCCM.B1.A:BEAM_ENERGY"].values[1:],
-            line_width=2,
-            line_color=color_energy_even if dict_fills[fill]["fill"] % 2 else color_energy_odd,
-        )
 
         # plot other variables on second y-axis
         for subdic_var in dict_var.values():
