@@ -56,7 +56,7 @@ def add_fill_metadata(
     if not os.path.exists(filename):
         print(f"File {filename} does not exist")
     else:
-        with open(f"{relative_path_metadata}{l_tag_filename[0]}") as f:
+        with open(filename) as f:
             yaml_file = yaml.load(f, Loader=yaml.FullLoader)
 
         dict_fills[f"{fill_idx}"]["df"]["fill"] = fill_idx
@@ -69,7 +69,10 @@ def add_fill_metadata(
         end_tag = yaml_file["end"].split(".")[0].replace(" ", "T")
         link = f"https://gitlab.cern.ch/lhclumi/fill-tagger/-/blob/master/elog_follow_up_md/{fill_idx}.md"
         dict_fills[f"{fill_idx}"]["df"]["link"] = link
-        dict_fills[f"{fill_idx}"]["df"]["alt_link"] = f"https://gitlab.cern.ch/lhclumi/fill-tagger/-/blob/master/weekly_follow_up/{filename}"
+        name_yaml = filename.split("weekly_follow_up/")[-1]
+        dict_fills[f"{fill_idx}"]["df"]["alt_link"] = (
+            f"https://gitlab.cern.ch/lhclumi/fill-tagger/-/blob/master/weekly_follow_up/{name_yaml}"
+        )
 
         # Add tags and comments
         if yaml_file["tags"] is None:
@@ -81,9 +84,11 @@ def add_fill_metadata(
         if yaml_file["comment"] is None:
             dict_fills[f"{fill_idx}"]["df"]["comment"] = ""
         else:
-            dict_fills[f"{fill_idx}"]["df"]["comment"] = ", ".join(
-                [str(comment) for comment in yaml_file["comment"]]
-            )
+            comment = ", ".join([str(comment) for comment in yaml_file["comment"]])
+            # Ensure comment is not too long
+            if len(comment) > 50:
+                comment = comment[:50] + "..."
+            dict_fills[f"{fill_idx}"]["df"]["comment"] = comment
 
     return dict_fills
 
